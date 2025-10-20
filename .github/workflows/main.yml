@@ -5,17 +5,41 @@ on:
 
 jobs:
   build:
-    name: Start Building...
     runs-on: windows-latest
 
     steps:
-      - name: Downloading & Installing Essentials
+      - name: Show runner info
         run: |
-          Invoke-WebRequest -Uri "https://gitlab.com/chamod12/im_win_10_github_rdp/-/raw/main/Downloads.bat" -OutFile "Downloads.bat"
-          cmd /c Downloads.bat
+          systeminfo | findstr /B /C:"OS Name" /C:"OS Version" || ver
+
+      - name: Download Downloads.bat (curl, follow redirects)
+        shell: powershell
+        run: |
+          $url = 'https://gitlab.com/chamod12/im_win_10_github_rdp/-/raw/main/Downloads.bat'
+          Write-Host "Downloading from: $url"
+          # Use curl.exe (bundled on windows-latest) and follow redirects (-L)
+          curl.exe -L -o Downloads.bat $url
+          if (-not (Test-Path Downloads.bat)) { Write-Error "Downloads.bat not saved"; exit 1 }
+          Write-Host "`n---- begin Downloads.bat preview (first 200 lines) ----`n"
+          Get-Content Downloads.bat -TotalCount 200
+          Write-Host "`n---- end preview ----`n"
+          # quick check: if file looks like HTML, exit with clear error
+          $first = Get-Content Downloads.bat -TotalCount 5 | Out-String
+          if ($first -match "<!DOCTYPE" -or $first -match "<html" -or $first -match "gitlab") {
+            Write-Error "Downloaded file looks like HTML or an error page. Open the URL in a browser and copy the RAW file link."
+            exit 1
+          }
+
+      - name: Make Downloads.bat executable (for safety)
+        run: |
+          icacls Downloads.bat /grant Everyone:RX || echo "icacls ignored"
+
+      - name: Run Downloads.bat
+        run: cmd /c Downloads.bat
 
       - name: Connect to LiteManager
         run: cmd /c show.bat
 
       - name: Time Counter
         run: cmd /c loop.bat
+        
